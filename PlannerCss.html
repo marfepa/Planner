@@ -4,13 +4,13 @@
      Modern, fluid, and premium aesthetics
      ========================================== */
 
-  /* CSS Variables for easy theming - ULTRA TRANSPARENCY */
+  /* CSS Variables for easy theming - GLASSMORPHISM WHITE UI */
   :root {
-    --glass-white: rgba(255, 255, 255, 0.45);
-    --glass-white-hover: rgba(255, 255, 255, 0.65);
-    --glass-border: rgba(255, 255, 255, 0.2);
-    --glass-shadow: rgba(0, 0, 0, 0.08);
-    --glass-shadow-lg: rgba(0, 0, 0, 0.12);
+    --glass-white: rgba(255, 255, 255, 0.6);
+    --glass-white-hover: rgba(255, 255, 255, 0.75);
+    --glass-border: rgba(200, 200, 220, 0.3);
+    --glass-shadow: rgba(0, 0, 0, 0.05);
+    --glass-shadow-lg: rgba(0, 0, 0, 0.1);
     --primary-blue: #007aff;
     --primary-blue-hover: #0051d5;
     --text-primary: #1d1d1f;
@@ -18,7 +18,7 @@
     --success: #30d158;
     --warning: #ff9f0a;
     --danger: #ff3b30;
-    --background-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --background-gradient: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   }
 
   /* Keyframe Animations - ADDICTIVE & SMOOTH */
@@ -113,6 +113,10 @@
     margin: 0;
     padding: 0;
     background: var(--background-gradient);
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(0, 122, 255, 0.03) 0%, transparent 50%),
+      radial-gradient(circle at 80% 70%, rgba(118, 75, 162, 0.03) 0%, transparent 50%),
+      linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     background-attachment: fixed;
     min-height: 100vh;
     overflow-x: hidden;
@@ -120,9 +124,9 @@
 
   /* Header with Glass Effect - ULTRA TRANSPARENT */
   .planner-header {
-    background: rgba(255, 255, 255, 0.3);
-    backdrop-filter: blur(30px) saturate(200%);
-    -webkit-backdrop-filter: blur(30px) saturate(200%);
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
     border-bottom: 1px solid var(--glass-border);
     color: var(--text-primary);
     padding: 16px 24px;
@@ -132,14 +136,14 @@
     position: sticky;
     top: 0;
     z-index: 100;
-    box-shadow: 0 4px 30px var(--glass-shadow);
+    box-shadow: 0 2px 20px var(--glass-shadow);
     animation: slideInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
     transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .planner-header:hover {
-    background: rgba(255, 255, 255, 0.4);
-    box-shadow: 0 6px 40px var(--glass-shadow-lg);
+    background: rgba(255, 255, 255, 0.65);
+    box-shadow: 0 4px 30px var(--glass-shadow-lg);
   }
 
   .planner-header h1 {
@@ -158,8 +162,8 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    background: rgba(255, 255, 255, 0.25);
-    backdrop-filter: blur(20px) saturate(180%);
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: blur(15px) saturate(130%);
     padding: 8px 16px;
     border-radius: 20px;
     border: 1px solid var(--glass-border);
@@ -167,14 +171,14 @@
   }
 
   .week-picker:hover {
-    background: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.6);
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px var(--glass-shadow-lg);
+    box-shadow: 0 4px 16px var(--glass-shadow-lg);
   }
 
   .week-picker button {
-    background: rgba(255, 255, 255, 0.3);
-    backdrop-filter: blur(15px);
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(10px);
     border: 1px solid var(--glass-border);
     border-radius: 12px;
     padding: 10px 14px;
@@ -186,9 +190,9 @@
   }
 
   .week-picker button:hover {
-    background: rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.75);
     transform: scale(1.1) translateY(-2px);
-    box-shadow: 0 6px 16px var(--glass-shadow-lg);
+    box-shadow: 0 4px 12px var(--glass-shadow-lg);
   }
 
   .week-picker button:active {
@@ -205,9 +209,9 @@
   /* Tabs with Glass Effect - ULTRA SMOOTH */
   .tabs {
     display: flex;
-    background: rgba(255, 255, 255, 0.3);
-    backdrop-filter: blur(30px) saturate(200%);
-    -webkit-backdrop-filter: blur(30px) saturate(200%);
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
     border-bottom: 1px solid var(--glass-border);
     position: sticky;
     top: 68px;
@@ -218,7 +222,7 @@
   }
 
   .tabs:hover {
-    background: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.65);
   }
 
   .tabs .tab {
@@ -243,7 +247,7 @@
 
   .tabs .tab.active {
     color: var(--primary-blue);
-    background: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.7);
     transform: translateY(-3px);
   }
 
@@ -317,8 +321,8 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: rgba(255, 255, 255, 0.35);
-    backdrop-filter: blur(15px) saturate(180%);
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(12px) saturate(130%);
     border-radius: 20px;
     padding: 8px 16px;
     font-size: 12px;
@@ -330,8 +334,8 @@
 
   .legend-item:hover {
     transform: translateY(-4px) scale(1.05);
-    box-shadow: 0 6px 20px var(--glass-shadow-lg);
-    background: rgba(255, 255, 255, 0.55);
+    box-shadow: 0 4px 16px var(--glass-shadow-lg);
+    background: rgba(255, 255, 255, 0.7);
   }
 
   .legend-color {
@@ -344,15 +348,15 @@
 
   /* Day Columns - ULTRA NARROW & TRANSPARENT */
   .day-column {
-    background: rgba(255, 255, 255, 0.35);
-    backdrop-filter: blur(25px) saturate(200%);
-    -webkit-backdrop-filter: blur(25px) saturate(200%);
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
     border-radius: 16px;
     padding: 12px;
     min-height: 260px;
     min-width: 150px;
     max-width: 250px;
-    box-shadow: 0 8px 32px var(--glass-shadow);
+    box-shadow: 0 4px 20px var(--glass-shadow);
     border: 1px solid var(--glass-border);
     transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
     animation: floatIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
@@ -360,8 +364,8 @@
 
   .day-column:hover {
     transform: translateY(-8px) scale(1.02);
-    box-shadow: 0 16px 60px var(--glass-shadow-lg);
-    background: rgba(255, 255, 255, 0.45);
+    box-shadow: 0 8px 32px var(--glass-shadow-lg);
+    background: rgba(255, 255, 255, 0.65);
   }
 
   .day-column h3 {
@@ -381,8 +385,8 @@
 
   /* Slot Cards - ULTRA ADDICTIVE ANIMATIONS */
   .slot-card {
-    background: rgba(255, 255, 255, 0.5);
-    backdrop-filter: blur(15px) saturate(180%);
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(12px) saturate(130%);
     border-radius: 12px;
     padding: 10px;
     margin-bottom: 8px;
@@ -428,9 +432,9 @@
 
   .slot-card:hover {
     transform: translateY(-5px) scale(1.03) rotate(0.5deg);
-    box-shadow: 0 12px 36px var(--glass-shadow-lg);
+    box-shadow: 0 8px 24px var(--glass-shadow-lg);
     border: 1px solid var(--primary-blue);
-    background: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.8);
   }
 
   .slot-card:active {
@@ -525,9 +529,9 @@
   }
 
   .timeline-item {
-    background: rgba(255, 255, 255, 0.35);
-    backdrop-filter: blur(25px) saturate(200%);
-    -webkit-backdrop-filter: blur(25px) saturate(200%);
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
     border-left: 4px solid var(--primary-blue);
     padding: 16px 18px;
     border-radius: 12px;
@@ -540,8 +544,8 @@
 
   .timeline-item:hover {
     transform: translateX(8px) scale(1.01);
-    box-shadow: 0 8px 32px var(--glass-shadow-lg);
-    background: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 6px 24px var(--glass-shadow-lg);
+    background: rgba(255, 255, 255, 0.7);
   }
 
   .timeline-item h4 {
@@ -567,20 +571,20 @@
 
   /* Form Styles - ULTRA GLASS DESIGN */
   form {
-    background: rgba(255, 255, 255, 0.35);
-    backdrop-filter: blur(30px) saturate(200%);
-    -webkit-backdrop-filter: blur(30px) saturate(200%);
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
     padding: 24px;
     border-radius: 16px;
-    box-shadow: 0 8px 32px var(--glass-shadow);
+    box-shadow: 0 4px 20px var(--glass-shadow);
     border: 1px solid var(--glass-border);
     animation: floatIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
     transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   form:hover {
-    background: rgba(255, 255, 255, 0.45);
-    box-shadow: 0 12px 48px var(--glass-shadow-lg);
+    background: rgba(255, 255, 255, 0.65);
+    box-shadow: 0 6px 30px var(--glass-shadow-lg);
   }
 
   form label {
@@ -597,8 +601,8 @@
     border: 1px solid var(--glass-border);
     border-radius: 10px;
     font-size: 14px;
-    background: rgba(255, 255, 255, 0.4);
-    backdrop-filter: blur(15px) saturate(180%);
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(12px) saturate(130%);
     transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
     color: var(--text-primary);
     font-family: inherit;
@@ -606,14 +610,14 @@
   }
 
   input:hover, select:hover, textarea:hover {
-    background: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.7);
     transform: translateY(-1px);
   }
 
   input:focus, select:focus, textarea:focus {
     outline: none;
     border-color: var(--primary-blue);
-    background: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.85);
     box-shadow: 0 0 0 5px rgba(0, 122, 255, 0.15), 0 4px 12px rgba(0, 122, 255, 0.2);
     transform: translateY(-2px) scale(1.01);
   }
@@ -682,8 +686,8 @@
   }
 
   .secondary {
-    background: rgba(255, 255, 255, 0.35);
-    backdrop-filter: blur(15px) saturate(180%);
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(12px) saturate(130%);
     color: var(--text-primary);
     border: 1px solid var(--glass-border);
     padding: 12px 24px;
@@ -692,9 +696,9 @@
   }
 
   .secondary:hover {
-    background: rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.75);
     transform: translateY(-3px) scale(1.02);
-    box-shadow: 0 6px 16px var(--glass-shadow-lg);
+    box-shadow: 0 4px 12px var(--glass-shadow-lg);
   }
 
   .secondary:active {
@@ -723,8 +727,8 @@
   /* Duplicate Panel - ULTRA GLASS */
   .duplicate-panel {
     margin-top: 24px;
-    background: rgba(255, 255, 255, 0.3);
-    backdrop-filter: blur(20px) saturate(180%);
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(18px) saturate(130%);
     border: 1px solid var(--glass-border);
     border-radius: 16px;
     padding: 20px;
@@ -733,8 +737,8 @@
   }
 
   .duplicate-panel:hover {
-    background: rgba(255, 255, 255, 0.4);
-    box-shadow: 0 8px 32px var(--glass-shadow-lg);
+    background: rgba(255, 255, 255, 0.65);
+    box-shadow: 0 4px 24px var(--glass-shadow-lg);
   }
 
   .duplicate-panel[hidden] {
@@ -778,8 +782,8 @@
   .empty-message {
     font-size: 14px;
     color: var(--text-secondary);
-    background: rgba(255, 255, 255, 0.3);
-    backdrop-filter: blur(15px) saturate(180%);
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(12px) saturate(130%);
     border-radius: 12px;
     padding: 24px;
     text-align: center;
@@ -790,7 +794,7 @@
   }
 
   .empty-message:hover {
-    background: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.65);
     transform: scale(1.02);
   }
 
