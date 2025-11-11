@@ -652,15 +652,24 @@ function saveSession(session) {
   if (!session) {
     throw new Error('No se recibieron datos de sesión');
   }
-  if (!session.Fecha) {
+  if (!session.Fecha || session.Fecha.toString().trim() === '') {
     throw new Error('La fecha es obligatoria');
   }
-  if (!session.Grupo) {
+  if (!session.Grupo || session.Grupo.toString().trim() === '') {
     throw new Error('El grupo es obligatorio');
   }
   var date = parseISODate(session.Fecha);
-  if (!date) {
+  if (!date || isNaN(date.getTime())) {
     throw new Error('Fecha inválida: usa formato AAAA-MM-DD');
+  }
+
+  // Validate course date range
+  var courseRange = getCourseDateRange();
+  if (courseRange.start && date < courseRange.start) {
+    throw new Error('La fecha está fuera del rango del curso (antes del inicio)');
+  }
+  if (courseRange.end && date > courseRange.end) {
+    throw new Error('La fecha está fuera del rango del curso (después del fin)');
   }
   session['Fecha'] = formatISODate(date);
   session['Día'] = getSpanishDayName(date);
@@ -683,26 +692,36 @@ function saveSession(session) {
 }
 
 function deleteSession(sessionId) {
-  if (!sessionId) {
+  if (!sessionId || sessionId.toString().trim() === '') {
     throw new Error('Falta el identificador de la sesión');
   }
+
+  var normalizedId = sessionId.toString().trim();
   var sheet = SpreadsheetApp.getActive().getSheetByName(DATA.sheets.sessions);
   if (!sheet) {
     throw new Error('No se encuentra la hoja de sesiones');
   }
+
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) {
     throw new Error('No hay sesiones registradas');
   }
-  var values = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+
+  var lastColumn = sheet.getLastColumn();
+  if (lastColumn < 1) {
+    throw new Error('La hoja de sesiones no tiene columnas');
+  }
+
+  var values = sheet.getRange(2, 1, lastRow - 1, lastColumn).getValues();
   for (var i = 0; i < values.length; i++) {
-    if (values[i][0] === sessionId) {
+    if (values[i][0] && values[i][0].toString().trim() === normalizedId) {
       sheet.deleteRow(i + 2);
-      logAction('DELETE_SESSION', sessionId);
+      logAction('DELETE_SESSION', normalizedId);
       return true;
     }
   }
-  throw new Error('No se encontró la sesión ' + sessionId);
+
+  throw new Error('No se encontró la sesión con ID: ' + normalizedId);
 }
 
 function duplicateSession(sessionOrData, overrides) {
@@ -747,13 +766,15 @@ function duplicateSession(sessionOrData, overrides) {
 }
 
 function getDateOfISOWeek(week, year) {
-  var simple = new Date(year, 0, 1 + (week - 1) * 7);
-  var dow = simple.getDay();
-  var ISOweekStart = simple;
-  if (dow <= 4) {
-    ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
-  } else {
-    ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
-  }
-  return ISOweekStart;
+  // ISO 8601 week date system: Week 1 is the first week with Thursday in it
+  var jan4 = new Date(year, 0, 4); // January 4 is always in week 1
+  var jan4Day = jan4.getDay() || 7; // Convert Sunday (0) to 7
+  var week1Monday = new Date(jan4);
+  week1Monday.setDate(jan4.getDate() - jan4Day + 1); // Get to Monday of week 1
+
+  // Calculate target Monday
+  var targetMonday = new Date(week1Monday);
+  targetMonday.setDate(week1Monday.getDate() + (week - 1) * 7);
+
+  return targetMonday;
 }
