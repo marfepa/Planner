@@ -1,3 +1,21 @@
+/**
+ * Sanitizes a string input by trimming and limiting length
+ * @param {*} value - The value to sanitize
+ * @param {number} maxLength - Maximum allowed length (default: 10000)
+ * @return {string} Sanitized string
+ */
+function sanitizeString(value, maxLength) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  maxLength = maxLength || 10000;
+  var str = value.toString().trim();
+  if (str.length > maxLength) {
+    str = str.substring(0, maxLength);
+  }
+  return str;
+}
+
 var DATA = {
   timezone: Session.getScriptTimeZone() || 'Europe/Madrid',
   sheets: {
@@ -93,28 +111,40 @@ function getSheetData(sheetName) {
 }
 
 function upsertRow(sheetName, keyColumn, data) {
+  if (!sheetName || !keyColumn || !data) {
+    throw new Error('Parámetros inválidos: sheetName, keyColumn y data son obligatorios');
+  }
+
   var sheet = SpreadsheetApp.getActive().getSheetByName(sheetName);
   if (!sheet) {
     throw new Error('No se encuentra la hoja ' + sheetName);
   }
+
   var expectedHeaders = DATA.headers[getHeaderKeyByName(sheetName)] || [];
+  if (!expectedHeaders.length) {
+    throw new Error('No hay cabeceras definidas para la hoja ' + sheetName);
+  }
+
   var lastColumn = sheet.getLastColumn();
   if (lastColumn === 0) {
-    if (!expectedHeaders.length) {
-      throw new Error('La hoja ' + sheetName + ' no tiene columnas definidas.');
-    }
     sheet.getRange(1, 1, 1, expectedHeaders.length).setValues([expectedHeaders]);
     lastColumn = expectedHeaders.length;
   }
+
   var headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
-  if (!headers.filter(function(value) { return value && value.toString().trim() !== ''; }).length && expectedHeaders.length) {
+  var hasValidHeaders = headers.some(function(value) {
+    return value && value.toString().trim() !== '';
+  });
+
+  if (!hasValidHeaders) {
     headers = expectedHeaders.slice();
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     lastColumn = headers.length;
   }
+
   var keyIndex = headers.indexOf(keyColumn);
   if (keyIndex === -1) {
-    throw new Error('No se encuentra la columna clave ' + keyColumn + ' en ' + sheetName);
+    throw new Error('No se encuentra la columna clave "' + keyColumn + '" en ' + sheetName + '. Columnas disponibles: ' + headers.join(', '));
   }
   var lastRow = sheet.getLastRow();
   var dataRange = lastRow > 1 ? sheet.getRange(2, 1, lastRow - 1, headers.length).getValues() : [];
@@ -184,17 +214,46 @@ function parseISODate(value) {
   if (!value) {
     return null;
   }
-  var parts = value.toString().split('-');
+
+  var str = value.toString().trim();
+  if (!str) {
+    return null;
+  }
+
+  // Match ISO format YYYY-MM-DD
+  var parts = str.split('-');
   if (parts.length !== 3) {
     return null;
   }
+
   var year = Number(parts[0]);
   var month = Number(parts[1]) - 1;
   var day = Number(parts[2]);
+
+  // Validate ranges
+  if (isNaN(year) || isNaN(month) || isNaN(day)) {
+    return null;
+  }
+  if (year < 1900 || year > 2100) {
+    return null;
+  }
+  if (month < 0 || month > 11) {
+    return null;
+  }
+  if (day < 1 || day > 31) {
+    return null;
+  }
+
   var date = new Date(year, month, day);
   if (isNaN(date.getTime())) {
     return null;
   }
+
+  // Verify date components match (catches invalid dates like Feb 30)
+  if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) {
+    return null;
+  }
+
   return date;
 }
 
@@ -348,7 +407,9 @@ function ensureCourseCalendar(startDate, endDate) {
 }
 
 function generateId(prefix) {
-  return prefix + '-' + new Date().getTime();
+  var timestamp = new Date().getTime();
+  var random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  return prefix + '-' + timestamp + '-' + random;
 }
 
 function logAction(action, detail) {

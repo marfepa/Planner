@@ -8,10 +8,34 @@
     currentCourseFilter: '',
     selectedSession: null,
     currentGroupId: '',
-    pendingUnitSelection: ''
+    pendingUnitSelection: '',
+    // DOM element cache
+    elements: {}
   };
 
   document.addEventListener('DOMContentLoaded', initialize);
+
+  function cacheElements() {
+    state.elements = {
+      sessionForm: document.getElementById('sessionForm'),
+      dateInput: document.querySelector('input[name="Fecha"]'),
+      groupSelect: document.querySelector('select[name="Grupo"]'),
+      udSelect: document.querySelector('select[name="UD"]'),
+      courseFilter: document.getElementById('courseFilter'),
+      weekLabel: document.getElementById('weekLabel'),
+      weekGrid: document.getElementById('weekGrid'),
+      timelineList: document.getElementById('timelineList'),
+      courseLegend: document.getElementById('courseLegend'),
+      selectedDayLabel: document.getElementById('selectedDayLabel'),
+      duplicatePanel: document.getElementById('duplicatePanel'),
+      duplicateDate: document.getElementById('duplicateDate'),
+      duplicateGroup: document.getElementById('duplicateGroup'),
+      duplicateSlot: document.getElementById('duplicateSlot'),
+      duplicatePeriod: document.getElementById('duplicatePeriod'),
+      duplicateStart: document.getElementById('duplicateStart'),
+      duplicateEnd: document.getElementById('duplicateEnd')
+    };
+  }
 
   function escapeHtml(value) {
     if (value === null || value === undefined) {
@@ -106,17 +130,18 @@
   }
 
   function initialize() {
+    cacheElements();
     bindTabs();
     document.getElementById('prevWeek').addEventListener('click', () => shiftWeek(-1));
     document.getElementById('nextWeek').addEventListener('click', () => shiftWeek(1));
-    document.getElementById('sessionForm').addEventListener('submit', onSubmitSession);
+    state.elements.sessionForm.addEventListener('submit', onSubmitSession);
     document.getElementById('deleteSession').addEventListener('click', onDeleteSession);
     document.getElementById('resetForm').addEventListener('click', clearForm);
     document.getElementById('executeDuplicate').addEventListener('click', onExecuteDuplicate);
-    document.querySelector('input[name="Fecha"]').addEventListener('change', onDateChange);
-    document.querySelector('select[name="Grupo"]').addEventListener('change', onGroupChange);
-    document.getElementById('courseFilter').addEventListener('change', onCourseFilterChange);
-    document.getElementById('sessionForm').addEventListener('input', () => {
+    state.elements.dateInput.addEventListener('change', onDateChange);
+    state.elements.groupSelect.addEventListener('change', onGroupChange);
+    state.elements.courseFilter.addEventListener('change', onCourseFilterChange);
+    state.elements.sessionForm.addEventListener('input', () => {
       setDuplicateDefaults(getSessionDraftFromForm());
     });
     loadBootstrap();
@@ -274,14 +299,14 @@
       form.elements['Periodo'].value = '';
       form.elements['Hora inicio'].value = '';
       form.elements['Hora fin'].value = '';
-    renderUnitOptions([], form.elements['UD'].value);
-    state.pendingGroupSelection = null;
-    state.currentGroupId = '';
-    setDuplicateDefaults(getSessionDraftFromForm());
-    return;
-  }
+      renderUnitOptions([], form.elements['UD'].value);
+      state.pendingGroupSelection = null;
+      state.currentGroupId = '';
+      setDuplicateDefaults(getSessionDraftFromForm());
+      return;
+    }
 
-  groupSelect.disabled = false;
+    groupSelect.disabled = false;
     groups.forEach(group => {
       const option = document.createElement('option');
       option.value = group.id;
