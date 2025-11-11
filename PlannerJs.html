@@ -10,8 +10,34 @@
     currentGroupId: '',
     pendingUnitSelection: '',
     // DOM element cache
-    elements: {}
+    elements: {},
+    // Performance optimization flags
+    isLoading: false,
+    pendingRenders: new Set()
   };
+
+  // Debounce utility for performance
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  // Request Animation Frame wrapper for smooth updates
+  function scheduleRender(key, callback) {
+    if (state.pendingRenders.has(key)) return;
+    state.pendingRenders.add(key);
+    requestAnimationFrame(() => {
+      callback();
+      state.pendingRenders.delete(key);
+    });
+  }
 
   document.addEventListener('DOMContentLoaded', initialize);
 
@@ -141,9 +167,11 @@
     state.elements.dateInput.addEventListener('change', onDateChange);
     state.elements.groupSelect.addEventListener('change', onGroupChange);
     state.elements.courseFilter.addEventListener('change', onCourseFilterChange);
-    state.elements.sessionForm.addEventListener('input', () => {
+    // Debounced input handler for performance
+    const debouncedFormInput = debounce(() => {
       setDuplicateDefaults(getSessionDraftFromForm());
-    });
+    }, 300);
+    state.elements.sessionForm.addEventListener('input', debouncedFormInput);
     loadBootstrap();
   }
 
@@ -732,85 +760,101 @@
   }
 
   function drawWeekGrid(slots) {
-    const grid = document.getElementById('weekGrid');
-    grid.innerHTML = '';
-    const days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
-    const grouped = {};
-    days.forEach(day => { grouped[day] = []; });
-    (slots || []).forEach(slot => {
-      if (!grouped[slot.day]) {
-        grouped[slot.day] = [];
-      }
-      grouped[slot.day].push(slot);
-    });
-    days.forEach(day => {
-      const column = document.createElement('div');
-      column.className = 'day-column';
-      const title = document.createElement('h3');
-      title.textContent = day;
-      column.appendChild(title);
-      const entries = grouped[day] || [];
-      if (!entries.length) {
-        const empty = document.createElement('div');
-        empty.className = 'empty-message';
-        empty.textContent = 'Sin horario definido';
-        column.appendChild(empty);
-      } else {
-        entries.forEach(slot => {
-          const card = document.createElement('div');
-          card.className = 'slot-card';
-          applySlotColor(card, slot.color);
-          const hasSession = !!(slot.session && Object.keys(slot.session).length);
-          const statusLabel = hasSession
-            ? (slot.session['Estado'] || slot.status || 'Planificada')
-            : 'Sin sesión';
-          const unitLabel = hasSession
-            ? (slot.unitName || slot.session['UD'] || 'Sin unidad asignada')
-            : (slot.unitName || 'Sin unidad asignada');
-          const metaPairs = [];
-          if (hasSession && slot.session['Objetivos']) {
-            metaPairs.push(['Objetivos', slot.session['Objetivos']]);
+    scheduleRender('weekGrid', () => {
+      const grid = document.getElementById('weekGrid');
+      // Fade out animation
+      grid.style.opacity = '0';
+
+      setTimeout(() => {
+        const fragment = document.createDocumentFragment();
+        const days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+        const grouped = {};
+        days.forEach(day => { grouped[day] = []; });
+        (slots || []).forEach(slot => {
+          if (!grouped[slot.day]) {
+            grouped[slot.day] = [];
           }
-          if (hasSession && slot.session['Actividades']) {
-            metaPairs.push(['Actividades', slot.session['Actividades']]);
-          }
-          if (hasSession && slot.session['Evaluación']) {
-            metaPairs.push(['Evaluación', slot.session['Evaluación']]);
-          }
-          if (hasSession && slot.session['Recursos']) {
-            metaPairs.push(['Recursos', slot.session['Recursos']]);
-          }
-          if (hasSession && slot.session['Notas']) {
-            metaPairs.push(['Notas', slot.session['Notas']]);
-          }
-          if (slot.room) {
-            metaPairs.push(['Aula', slot.room]);
-          }
-          const timeLabel = [slot.startTime, slot.endTime].filter(Boolean).join(' - ');
-          const titleParts = [];
-          if (slot.period) {
-            titleParts.push(slot.period);
-          }
-          if (timeLabel) {
-            titleParts.push(timeLabel);
-          }
-          const titleText = titleParts.join(' · ');
-          card.dataset.status = statusLabel;
-          const metaHtml = metaPairs
-            .map(([label, value]) => `<span class="slot-meta"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</span>`)
-            .join('');
-          card.innerHTML = `
-            <span class="slot-title">${escapeHtml(titleText)}</span>
-            <span class="slot-group">${escapeHtml(slot.groupName || '')}</span>
-            <span class="slot-unit">${escapeHtml(unitLabel)}</span>
-            ${metaHtml}
-            <span class="slot-status">${escapeHtml(statusLabel)}</span>
-          `;
-          card.addEventListener('click', () => prefillFormFromSlot(slot));
-          column.appendChild(card);
+          grouped[slot.day].push(slot);
         });
-      }
-      grid.appendChild(column);
+
+        days.forEach(day => {
+          const column = document.createElement('div');
+          column.className = 'day-column';
+          const title = document.createElement('h3');
+          title.textContent = day;
+          column.appendChild(title);
+          const entries = grouped[day] || [];
+          if (!entries.length) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-message';
+            empty.textContent = 'Sin horario definido';
+            column.appendChild(empty);
+          } else {
+            entries.forEach((slot, index) => {
+              const card = document.createElement('div');
+              card.className = 'slot-card';
+              card.style.animationDelay = `${index * 0.05}s`;
+              applySlotColor(card, slot.color);
+              const hasSession = !!(slot.session && Object.keys(slot.session).length);
+              const statusLabel = hasSession
+                ? (slot.session['Estado'] || slot.status || 'Planificada')
+                : 'Sin sesión';
+              const unitLabel = hasSession
+                ? (slot.unitName || slot.session['UD'] || 'Sin unidad asignada')
+                : (slot.unitName || 'Sin unidad asignada');
+              const metaPairs = [];
+              if (hasSession && slot.session['Objetivos']) {
+                metaPairs.push(['Objetivos', slot.session['Objetivos']]);
+              }
+              if (hasSession && slot.session['Actividades']) {
+                metaPairs.push(['Actividades', slot.session['Actividades']]);
+              }
+              if (hasSession && slot.session['Evaluación']) {
+                metaPairs.push(['Evaluación', slot.session['Evaluación']]);
+              }
+              if (hasSession && slot.session['Recursos']) {
+                metaPairs.push(['Recursos', slot.session['Recursos']]);
+              }
+              if (hasSession && slot.session['Notas']) {
+                metaPairs.push(['Notas', slot.session['Notas']]);
+              }
+              if (slot.room) {
+                metaPairs.push(['Aula', slot.room]);
+              }
+              const timeLabel = [slot.startTime, slot.endTime].filter(Boolean).join(' - ');
+              const titleParts = [];
+              if (slot.period) {
+                titleParts.push(slot.period);
+              }
+              if (timeLabel) {
+                titleParts.push(timeLabel);
+              }
+              const titleText = titleParts.join(' · ');
+              card.dataset.status = statusLabel;
+              const metaHtml = metaPairs
+                .map(([label, value]) => `<span class="slot-meta"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</span>`)
+                .join('');
+              card.innerHTML = `
+                <span class="slot-title">${escapeHtml(titleText)}</span>
+                <span class="slot-group">${escapeHtml(slot.groupName || '')}</span>
+                <span class="slot-unit">${escapeHtml(unitLabel)}</span>
+                ${metaHtml}
+                <span class="slot-status">${escapeHtml(statusLabel)}</span>
+              `;
+              card.addEventListener('click', () => prefillFormFromSlot(slot));
+              column.appendChild(card);
+            });
+          }
+          fragment.appendChild(column);
+        });
+
+        grid.innerHTML = '';
+        grid.appendChild(fragment);
+        // Fade in animation
+        requestAnimationFrame(() => {
+          grid.style.opacity = '1';
+        });
+      }, 150);
     });
   }
 
@@ -994,48 +1038,62 @@
   }
 
   function drawTimeline(items) {
-    const container = document.getElementById('timelineList');
-    container.innerHTML = '';
-    if (!items || !items.length) {
-      const empty = document.createElement('div');
-      empty.className = 'empty-message';
-      empty.textContent = 'No hay datos para la selección actual.';
-      container.appendChild(empty);
-      return;
-    }
-    items.forEach(item => {
-      const node = document.createElement('div');
-      node.className = 'timeline-item';
-      applySlotColor(node, item.color || '#2563eb');
-      const lines = [];
-      const timeLabel = item.startTime && item.endTime ? `${item.startTime} - ${item.endTime}` : (item.startTime || '');
-      lines.push(`<div class="meta">${escapeHtml(item.day)} · ${escapeHtml(item.period || '')}${timeLabel ? ' · ' + escapeHtml(timeLabel) : ''}</div>`);
-      lines.push(`<div class="meta">${escapeHtml(item.course || 'Sin curso')} · ${escapeHtml(item.unitName || 'Sin unidad asignada')}</div>`);
-      lines.push(`<div class="meta"><strong>Estado:</strong> ${escapeHtml(item.status)}</div>`);
-      if (item.objectives) {
-        lines.push(`<div class="meta"><strong>Objetivos:</strong> ${escapeHtml(item.objectives)}</div>`);
-      }
-      if (item.activities) {
-        lines.push(`<div class="meta"><strong>Actividades:</strong> ${escapeHtml(item.activities)}</div>`);
-      }
-      if (item.evaluation) {
-        lines.push(`<div class="meta"><strong>Evaluación:</strong> ${escapeHtml(item.evaluation)}</div>`);
-      }
-      if (item.resources) {
-        lines.push(`<div class="meta"><strong>Recursos:</strong> ${escapeHtml(item.resources)}</div>`);
-      }
-      if (item.notes) {
-        lines.push(`<div class="meta"><strong>Notas:</strong> ${escapeHtml(item.notes)}</div>`);
-      }
-      node.innerHTML = `
-        <h4>${escapeHtml(item.date)} · ${escapeHtml(item.groupName || 'Sin grupo')}</h4>
-        ${lines.join('')}
-      `;
-      const header = node.querySelector('h4');
-      if (header && item.color) {
-        header.style.color = normalizeHexColor(item.color) || header.style.color;
-      }
-      container.appendChild(node);
+    scheduleRender('timeline', () => {
+      const container = document.getElementById('timelineList');
+      container.style.opacity = '0';
+
+      setTimeout(() => {
+        const fragment = document.createDocumentFragment();
+
+        if (!items || !items.length) {
+          const empty = document.createElement('div');
+          empty.className = 'empty-message';
+          empty.textContent = 'No hay datos para la selección actual.';
+          fragment.appendChild(empty);
+        } else {
+          items.forEach((item, index) => {
+            const node = document.createElement('div');
+            node.className = 'timeline-item';
+            node.style.animationDelay = `${index * 0.03}s`;
+            applySlotColor(node, item.color || '#2563eb');
+            const lines = [];
+            const timeLabel = item.startTime && item.endTime ? `${item.startTime} - ${item.endTime}` : (item.startTime || '');
+            lines.push(`<div class="meta">${escapeHtml(item.day)} · ${escapeHtml(item.period || '')}${timeLabel ? ' · ' + escapeHtml(timeLabel) : ''}</div>`);
+            lines.push(`<div class="meta">${escapeHtml(item.course || 'Sin curso')} · ${escapeHtml(item.unitName || 'Sin unidad asignada')}</div>`);
+            lines.push(`<div class="meta"><strong>Estado:</strong> ${escapeHtml(item.status)}</div>`);
+            if (item.objectives) {
+              lines.push(`<div class="meta"><strong>Objetivos:</strong> ${escapeHtml(item.objectives)}</div>`);
+            }
+            if (item.activities) {
+              lines.push(`<div class="meta"><strong>Actividades:</strong> ${escapeHtml(item.activities)}</div>`);
+            }
+            if (item.evaluation) {
+              lines.push(`<div class="meta"><strong>Evaluación:</strong> ${escapeHtml(item.evaluation)}</div>`);
+            }
+            if (item.resources) {
+              lines.push(`<div class="meta"><strong>Recursos:</strong> ${escapeHtml(item.resources)}</div>`);
+            }
+            if (item.notes) {
+              lines.push(`<div class="meta"><strong>Notas:</strong> ${escapeHtml(item.notes)}</div>`);
+            }
+            node.innerHTML = `
+              <h4>${escapeHtml(item.date)} · ${escapeHtml(item.groupName || 'Sin grupo')}</h4>
+              ${lines.join('')}
+            `;
+            const header = node.querySelector('h4');
+            if (header && item.color) {
+              header.style.color = normalizeHexColor(item.color) || header.style.color;
+            }
+            fragment.appendChild(node);
+          });
+        }
+
+        container.innerHTML = '';
+        container.appendChild(fragment);
+        requestAnimationFrame(() => {
+          container.style.opacity = '1';
+        });
+      }, 150);
     });
   }
 
