@@ -1,0 +1,1066 @@
+<script>
+  const state = {
+    bootstrap: null,
+    allUnits: [],
+    currentDate: new Date(),
+    availableGroups: [],
+    pendingGroupSelection: null,
+    currentCourseFilter: '',
+    selectedSession: null,
+    currentGroupId: '',
+    pendingUnitSelection: ''
+  };
+
+  document.addEventListener('DOMContentLoaded', initialize);
+
+  function escapeHtml(value) {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    return value.toString()
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function normalizeHexColor(color) {
+    if (!color) {
+      return '';
+    }
+    let hex = color.toString().trim();
+    if (hex.startsWith('#')) {
+      hex = hex.slice(1);
+    }
+    if (/^[0-9a-fA-F]{3}$/.test(hex)) {
+      hex = hex.split('').map(ch => ch + ch).join('');
+    }
+    if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+      return `#${hex.toUpperCase()}`;
+    }
+    return '';
+  }
+
+  function mixWithWhite(hexColor, ratio) {
+    const hex = hexColor.replace('#', '');
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    const mix = (channel) => Math.round(channel + (255 - channel) * ratio);
+    const toHex = (value) => value.toString(16).padStart(2, '0');
+    return `#${toHex(mix(r))}${toHex(mix(g))}${toHex(mix(b))}`.toUpperCase();
+  }
+
+  function getContrastColor(hexColor) {
+    const hex = hexColor.replace('#', '');
+    const r = parseInt(hex.slice(0, 2), 16) / 255;
+    const g = parseInt(hex.slice(2, 4), 16) / 255;
+    const b = parseInt(hex.slice(4, 6), 16) / 255;
+    const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+    return luminance > 0.6 ? '#0f172a' : '#f8fafc';
+  }
+
+  function applySlotColor(element, color) {
+    const hex = normalizeHexColor(color);
+    if (!hex) {
+      element.style.backgroundColor = '';
+      element.style.borderLeft = '4px solid transparent';
+      element.style.color = '';
+      return;
+    }
+    const background = mixWithWhite(hex, 0.75);
+    const textColor = getContrastColor(background);
+    element.style.backgroundColor = background;
+    element.style.borderLeft = `4px solid ${hex}`;
+    element.style.color = textColor;
+  }
+
+  function getSessionDraftFromForm() {
+    const form = document.getElementById('sessionForm');
+    if (!form) {
+      return null;
+    }
+    const data = {};
+    const formData = new FormData(form);
+    formData.forEach((value, key) => {
+      data[key] = value;
+    });
+    data.Fecha = form.elements['Fecha'].value || '';
+    data.Grupo = form.elements['Grupo'].value || '';
+    data['Periodo'] = form.elements['Periodo'].value || '';
+    data['Hora inicio'] = form.elements['Hora inicio'].value || '';
+    data['Hora fin'] = form.elements['Hora fin'].value || '';
+    data['UD'] = form.elements['UD'].value || '';
+    data['Estado'] = form.elements['Estado'].value || 'Planificada';
+    data['Notas'] = form.elements['Notas'].value || '';
+    data['Objetivos'] = form.elements['Objetivos'].value || '';
+    data['Actividades'] = form.elements['Actividades'].value || '';
+    data['Evaluación'] = form.elements['Evaluación'].value || '';
+    data['Recursos'] = form.elements['Recursos'].value || '';
+    return data;
+  }
+
+  function isDuplicateReady(session) {
+    return !!(session && session.Fecha && session.Grupo);
+  }
+
+  function initialize() {
+    bindTabs();
+    document.getElementById('prevWeek').addEventListener('click', () => shiftWeek(-1));
+    document.getElementById('nextWeek').addEventListener('click', () => shiftWeek(1));
+    document.getElementById('sessionForm').addEventListener('submit', onSubmitSession);
+    document.getElementById('deleteSession').addEventListener('click', onDeleteSession);
+    document.getElementById('resetForm').addEventListener('click', clearForm);
+    document.getElementById('executeDuplicate').addEventListener('click', onExecuteDuplicate);
+    document.querySelector('input[name="Fecha"]').addEventListener('change', onDateChange);
+    document.querySelector('select[name="Grupo"]').addEventListener('change', onGroupChange);
+    document.getElementById('courseFilter').addEventListener('change', onCourseFilterChange);
+    document.getElementById('sessionForm').addEventListener('input', () => {
+      setDuplicateDefaults(getSessionDraftFromForm());
+    });
+    loadBootstrap();
+  }
+
+  function bindTabs() {
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+      });
+    });
+  }
+
+  function loadBootstrap() {
+    google.script.run
+      .withSuccessHandler(data => {
+        state.bootstrap = data;
+        state.allUnits = data.uds || [];
+        renderCourseLegend();
+        renderCourseFilter();
+        initDuplicateControls();
+        renderUnitOptions([], '');
+        setDuplicateDefaults(null);
+        setDefaultDate();
+        renderWeek();
+        renderTimeline();
+      })
+      .withFailureHandler(showError)
+      .getPlannerBootstrap();
+  }
+
+  function renderCourseFilter() {
+    const select = document.getElementById('courseFilter');
+    select.innerHTML = '';
+    const optionAll = document.createElement('option');
+    optionAll.value = '';
+    optionAll.textContent = 'Todos los cursos y grupos';
+    select.appendChild(optionAll);
+
+    const courses = (state.bootstrap.courses || []).slice().sort();
+    courses.forEach(course => {
+      const option = document.createElement('option');
+      option.value = `COURSE::${course}`;
+      option.textContent = `Curso · ${course}`;
+      select.appendChild(option);
+    });
+
+    const grupos = (state.bootstrap.grupos || []).slice().filter(grupo => grupo && grupo.ID).sort((a, b) => {
+      const nameA = (a.Nombre || a.ID || '').toLowerCase();
+      const nameB = (b.Nombre || b.ID || '').toLowerCase();
+      if (nameA === nameB) {
+        return 0;
+      }
+      return nameA > nameB ? 1 : -1;
+    });
+    grupos.forEach(grupo => {
+      const option = document.createElement('option');
+      option.value = `GROUP::${grupo.ID}`;
+      option.textContent = `Grupo · ${grupo.Nombre || grupo.ID}`;
+      select.appendChild(option);
+    });
+
+    const hasValue = Array.from(select.options).some(opt => opt.value === state.currentCourseFilter);
+    select.value = hasValue ? state.currentCourseFilter : '';
+  }
+
+  function renderCourseLegend() {
+    const container = document.getElementById('courseLegend');
+    if (!container) {
+      return;
+    }
+    const colors = (state.bootstrap && state.bootstrap.courseColors) || {};
+    const entries = Object.keys(colors).sort((a, b) => a.localeCompare(b, 'es'));
+    if (!entries.length) {
+      container.hidden = true;
+      container.innerHTML = '';
+      return;
+    }
+    container.hidden = false;
+    container.innerHTML = '';
+    entries.forEach(course => {
+      const color = colors[course] || '';
+      const item = document.createElement('span');
+      item.className = 'legend-item';
+      const swatch = document.createElement('span');
+      swatch.className = 'legend-color';
+      swatch.style.backgroundColor = color || '#d1d5db';
+      const label = document.createElement('span');
+      label.textContent = course || 'Sin curso';
+      item.appendChild(swatch);
+      item.appendChild(label);
+      container.appendChild(item);
+    });
+  }
+
+  function setDefaultDate() {
+    const dateInput = document.querySelector('input[name="Fecha"]');
+    const today = new Date();
+    const start = state.bootstrap.courseRange.start ? new Date(state.bootstrap.courseRange.start) : null;
+    const end = state.bootstrap.courseRange.end ? new Date(state.bootstrap.courseRange.end) : null;
+    let target = today;
+    if (start && today < start) {
+      target = start;
+    }
+    if (end && today > end) {
+      target = end;
+    }
+    if (!start && !end) {
+      target = today;
+    }
+    const iso = toISODate(target);
+    dateInput.value = iso;
+    state.currentDate = new Date(target);
+    updateSelectedDayLabel(iso, []);
+    loadGroupsForDate(iso);
+  }
+
+  function onDateChange() {
+    const dateInput = document.querySelector('input[name="Fecha"]');
+    if (!dateInput.value) {
+      return;
+    }
+    state.currentDate = new Date(dateInput.value);
+    updateSelectedDayLabel(dateInput.value, []);
+    loadGroupsForDate(dateInput.value);
+    renderWeek();
+    setDuplicateDefaults(getSessionDraftFromForm());
+  }
+
+  function loadGroupsForDate(dateStr) {
+    google.script.run
+      .withSuccessHandler(groups => {
+        state.availableGroups = Array.isArray(groups) ? groups : [];
+        updateGroupOptions(state.availableGroups);
+        updateSelectedDayLabel(dateStr, state.availableGroups);
+      })
+      .withFailureHandler(showError)
+      .getAvailableGroupsForDate(dateStr);
+  }
+
+  function updateGroupOptions(groups) {
+    const form = document.getElementById('sessionForm');
+    const groupSelect = form.elements['Grupo'];
+    const previousValue = groupSelect.value;
+    groupSelect.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = groups.length ? 'Selecciona grupo' : 'Sin grupos en esta fecha';
+    groupSelect.appendChild(placeholder);
+    if (!groups.length) {
+      groupSelect.disabled = true;
+      form.elements['Periodo'].value = '';
+      form.elements['Hora inicio'].value = '';
+      form.elements['Hora fin'].value = '';
+    renderUnitOptions([], form.elements['UD'].value);
+    state.pendingGroupSelection = null;
+    state.currentGroupId = '';
+    setDuplicateDefaults(getSessionDraftFromForm());
+    return;
+  }
+
+  groupSelect.disabled = false;
+    groups.forEach(group => {
+      const option = document.createElement('option');
+      option.value = group.id;
+      const timeLabel = group.startTime && group.endTime ? `${group.startTime} - ${group.endTime}` : 'Sin horario';
+      option.textContent = `${group.name} · ${group.period || 'Sin periodo'} (${timeLabel})`;
+      option.dataset.weekday = group.weekday || '';
+      groupSelect.appendChild(option);
+    });
+    const targetValue = state.pendingGroupSelection || previousValue;
+    if (targetValue && groups.some(group => group.id === targetValue)) {
+      groupSelect.value = targetValue;
+      if (groupSelect.value === targetValue) {
+        state.currentGroupId = targetValue;
+        state.pendingGroupSelection = null;
+        groupSelect.dispatchEvent(new Event('change'));
+        return;
+      }
+    }
+    groupSelect.value = '';
+    form.elements['Periodo'].value = '';
+    form.elements['Hora inicio'].value = '';
+    form.elements['Hora fin'].value = '';
+    renderUnitOptions([], form.elements['UD'].value);
+    state.pendingGroupSelection = null;
+    state.currentGroupId = '';
+    setDuplicateDefaults(getSessionDraftFromForm());
+  }
+
+  function onGroupChange() {
+    const groupSelect = document.querySelector('select[name="Grupo"]');
+    const groupId = groupSelect.value;
+    const form = document.getElementById('sessionForm');
+    if (!groupId) {
+      renderUnitOptions([], form.elements['UD'].value);
+      state.currentGroupId = '';
+      return;
+    }
+    const match = state.availableGroups.find(item => item.id === groupId);
+    if (match) {
+      form.elements['Periodo'].value = match.period || '';
+      form.elements['Hora inicio'].value = match.startTime || '';
+      form.elements['Hora fin'].value = match.endTime || '';
+    }
+    state.currentGroupId = groupId;
+    google.script.run
+      .withSuccessHandler(context => applyGroupContext(context))
+      .withFailureHandler(showError)
+      .getGroupContext(form.elements['Fecha'].value, groupId);
+  }
+
+  function applyGroupContext(context) {
+    const form = document.getElementById('sessionForm');
+    if (context.periodo) {
+      form.elements['Periodo'].value = context.periodo;
+    }
+    if (context.horaInicio) {
+      form.elements['Hora inicio'].value = context.horaInicio;
+    }
+    if (context.horaFin) {
+      form.elements['Hora fin'].value = context.horaFin;
+    }
+    const desiredUnit = state.pendingUnitSelection || form.elements['UD'].value;
+    renderUnitOptions(context.plannedUnits || [], desiredUnit);
+    if (state.pendingUnitSelection) {
+      form.elements['UD'].value = state.pendingUnitSelection;
+      state.pendingUnitSelection = '';
+    }
+    setDuplicateDefaults(getSessionDraftFromForm());
+  }
+
+  function updateSelectedDayLabel(dateStr, groups) {
+    const label = document.getElementById('selectedDayLabel');
+    if (!label) {
+      return;
+    }
+    if (!dateStr) {
+      label.textContent = '';
+      label.dataset.day = '';
+      return;
+    }
+    const dayFromGroup = groups && groups.length ? groups[0].weekday : '';
+    if (dayFromGroup) {
+      label.textContent = dayFromGroup;
+      label.dataset.day = dayFromGroup;
+      return;
+    }
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) {
+      label.textContent = '';
+      label.dataset.day = '';
+      return;
+    }
+    const formatter = new Intl.DateTimeFormat('es-ES', { weekday: 'long' });
+    const dayName = formatter.format(date);
+    const normalized = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+    label.textContent = normalized;
+    label.dataset.day = normalized;
+  }
+
+  function renderUnitOptions(plannedUnits, selectedId) {
+    const udSelect = document.querySelector('select[name="UD"]');
+    const plannedMap = new Set((plannedUnits || []).map(unit => unit.ID));
+    const allowedGroup = state.currentGroupId || '';
+    const allowedGroupName = allowedGroup
+      ? ((state.bootstrap.grupos || []).find(grupo => grupo && grupo.ID === allowedGroup)?.Nombre || '')
+      : '';
+    const allowedGroupNameNormalized = allowedGroupName.toLowerCase();
+    udSelect.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Selecciona unidad';
+    udSelect.appendChild(placeholder);
+    (plannedUnits || []).forEach(unit => {
+      if (!unit || !unit.ID) {
+        return;
+      }
+      const option = document.createElement('option');
+      option.value = unit.ID;
+      option.textContent = `* ${unit.Nombre}`;
+      udSelect.appendChild(option);
+    });
+    const catalogUnits = (state.allUnits || []).filter(unit => {
+      if (!unit || !unit.ID) {
+        return false;
+      }
+      const unitGroup = (unit.Grupo || '').toString().trim();
+      if (!allowedGroup) {
+        return true;
+      }
+      if (!unitGroup) {
+        return true;
+      }
+      if (unitGroup === allowedGroup) {
+        return true;
+      }
+      if (allowedGroupNameNormalized && unitGroup.toLowerCase() === allowedGroupNameNormalized) {
+        return true;
+      }
+      return false;
+    });
+    catalogUnits.forEach(unit => {
+      if (!unit || !unit.ID) {
+        return;
+      }
+      if (plannedMap.has(unit.ID)) {
+        return;
+      }
+      const option = document.createElement('option');
+      option.value = unit.ID;
+      option.textContent = unit.Nombre;
+      udSelect.appendChild(option);
+    });
+    if (selectedId) {
+      udSelect.value = selectedId;
+    }
+  }
+
+  function initDuplicateControls() {
+    const groupSelect = document.getElementById('duplicateGroup');
+    const duplicateDate = document.getElementById('duplicateDate');
+    const slotSelect = document.getElementById('duplicateSlot');
+    if (!groupSelect) {
+      return;
+    }
+    groupSelect.innerHTML = '';
+    const sameOption = document.createElement('option');
+    sameOption.value = '';
+    sameOption.textContent = 'Mismo grupo';
+    groupSelect.appendChild(sameOption);
+    (state.bootstrap.grupos || []).forEach(grupo => {
+      if (!grupo || !grupo.ID) {
+        return;
+      }
+      const option = document.createElement('option');
+      option.value = grupo.ID;
+      option.textContent = `Grupo · ${grupo.Nombre || grupo.ID}`;
+      groupSelect.appendChild(option);
+    });
+
+    groupSelect.addEventListener('change', prefillDuplicateFromGroup);
+    if (duplicateDate) {
+      duplicateDate.addEventListener('change', prefillDuplicateFromGroup);
+    }
+    if (slotSelect) {
+      slotSelect.addEventListener('change', onDuplicateSlotChange);
+    }
+    resetDuplicateSlotOptions();
+  }
+
+  function ensureDuplicateGroupOption(groupId, label) {
+    if (!groupId) {
+      return;
+    }
+    const groupSelect = document.getElementById('duplicateGroup');
+    if (!groupSelect) {
+      return;
+    }
+    const exists = Array.from(groupSelect.options).some(opt => opt.value === groupId);
+    if (!exists) {
+      const option = document.createElement('option');
+      option.value = groupId;
+      option.textContent = `Grupo · ${label || groupId}`;
+      groupSelect.appendChild(option);
+    }
+  }
+
+  function resetDuplicateSlotOptions() {
+    const slotSelect = document.getElementById('duplicateSlot');
+    if (!slotSelect) {
+      return;
+    }
+    slotSelect.innerHTML = '';
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'Selecciona horario';
+    slotSelect.appendChild(option);
+    slotSelect.disabled = true;
+  }
+
+  function setDuplicateDefaults(session) {
+    const panel = document.getElementById('duplicatePanel');
+    if (!panel) {
+      return;
+    }
+    const base = session || getSessionDraftFromForm();
+    if (!isDuplicateReady(base)) {
+      panel.hidden = true;
+      resetDuplicateSlotOptions();
+      return;
+    }
+    panel.hidden = false;
+    const duplicateDate = document.getElementById('duplicateDate');
+    const duplicateGroup = document.getElementById('duplicateGroup');
+    const duplicatePeriod = document.getElementById('duplicatePeriod');
+    const duplicateStart = document.getElementById('duplicateStart');
+    const duplicateEnd = document.getElementById('duplicateEnd');
+    if (duplicateDate) {
+      duplicateDate.value = base.Fecha || '';
+    }
+    if (duplicateGroup) {
+      const groupLabel = base.GrupoNombre
+        || (state.bootstrap.grupos || []).find(item => item && item.ID === base.Grupo)?.Nombre
+        || base.Grupo
+        || '';
+      ensureDuplicateGroupOption(base.Grupo, groupLabel);
+      duplicateGroup.value = base.Grupo || '';
+    }
+    if (duplicatePeriod) {
+      duplicatePeriod.value = base.Periodo || '';
+    }
+    if (duplicateStart) {
+      duplicateStart.value = base['Hora inicio'] || '';
+    }
+    if (duplicateEnd) {
+      duplicateEnd.value = base['Hora fin'] || '';
+    }
+    loadDuplicateSlots(base.Fecha || '', duplicateGroup ? duplicateGroup.value : '', {
+      period: base.Periodo || '',
+      start: base['Hora inicio'] || '',
+      end: base['Hora fin'] || ''
+    });
+  }
+
+  function loadDuplicateSlots(dateStr, groupId, fallback) {
+    const slotSelect = document.getElementById('duplicateSlot');
+    const duplicatePeriod = document.getElementById('duplicatePeriod');
+    const duplicateStart = document.getElementById('duplicateStart');
+    const duplicateEnd = document.getElementById('duplicateEnd');
+    if (!slotSelect) {
+      return;
+    }
+    if (!dateStr || !groupId) {
+      resetDuplicateSlotOptions();
+      if (duplicatePeriod) duplicatePeriod.value = fallback?.period || '';
+      if (duplicateStart) duplicateStart.value = fallback?.start || '';
+      if (duplicateEnd) duplicateEnd.value = fallback?.end || '';
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(slots => {
+        slotSelect.innerHTML = '';
+        const baseOption = document.createElement('option');
+        baseOption.value = '';
+        baseOption.textContent = 'Selecciona horario';
+        slotSelect.appendChild(baseOption);
+        const matches = (Array.isArray(slots) ? slots : []).filter(slot => slot.id === groupId);
+        if (!matches.length) {
+          slotSelect.disabled = true;
+          if (duplicatePeriod) duplicatePeriod.value = fallback?.period || '';
+          if (duplicateStart) duplicateStart.value = fallback?.start || '';
+          if (duplicateEnd) duplicateEnd.value = fallback?.end || '';
+          return;
+        }
+        matches.forEach(slot => {
+          const option = document.createElement('option');
+          option.value = JSON.stringify({
+            period: slot.period || '',
+            start: slot.startTime || '',
+            end: slot.endTime || ''
+          });
+          const timeLabel = [slot.startTime, slot.endTime].filter(Boolean).join(' - ');
+          option.textContent = `${slot.period || 'Sin periodo'} · ${timeLabel || 'Sin hora'}`;
+          slotSelect.appendChild(option);
+        });
+        slotSelect.disabled = false;
+        const desired = matches.find(slot => {
+          const periodMatch = fallback && fallback.period && slot.period === fallback.period;
+          const startMatch = fallback && fallback.start && slot.startTime === fallback.start;
+          return periodMatch || startMatch;
+        });
+        if (desired) {
+          slotSelect.value = JSON.stringify({
+            period: desired.period || '',
+            start: desired.startTime || '',
+            end: desired.endTime || ''
+          });
+          if (duplicatePeriod) duplicatePeriod.value = desired.period || fallback?.period || '';
+          if (duplicateStart) duplicateStart.value = desired.startTime || fallback?.start || '';
+          if (duplicateEnd) duplicateEnd.value = desired.endTime || fallback?.end || '';
+        } else if (matches.length === 1) {
+          const first = matches[0];
+          slotSelect.value = JSON.stringify({
+            period: first.period || '',
+            start: first.startTime || '',
+            end: first.endTime || ''
+          });
+          if (duplicatePeriod) duplicatePeriod.value = first.period || fallback?.period || '';
+          if (duplicateStart) duplicateStart.value = first.startTime || fallback?.start || '';
+          if (duplicateEnd) duplicateEnd.value = first.endTime || fallback?.end || '';
+        } else {
+          slotSelect.value = '';
+          if (duplicatePeriod) duplicatePeriod.value = fallback?.period || '';
+          if (duplicateStart) duplicateStart.value = fallback?.start || '';
+          if (duplicateEnd) duplicateEnd.value = fallback?.end || '';
+        }
+      })
+      .withFailureHandler(() => {
+        resetDuplicateSlotOptions();
+        if (duplicatePeriod) duplicatePeriod.value = fallback?.period || '';
+        if (duplicateStart) duplicateStart.value = fallback?.start || '';
+        if (duplicateEnd) duplicateEnd.value = fallback?.end || '';
+      })
+      .getAvailableGroupsForDate(dateStr);
+  }
+
+  function onDuplicateSlotChange(event) {
+    const value = event && event.target ? event.target.value : '';
+    if (!value) {
+      return;
+    }
+    try {
+      const data = JSON.parse(value);
+      const duplicatePeriod = document.getElementById('duplicatePeriod');
+      const duplicateStart = document.getElementById('duplicateStart');
+      const duplicateEnd = document.getElementById('duplicateEnd');
+      if (duplicatePeriod) {
+        duplicatePeriod.value = data.period || '';
+      }
+      if (duplicateStart) {
+        duplicateStart.value = data.start || '';
+      }
+      if (duplicateEnd) {
+        duplicateEnd.value = data.end || '';
+      }
+    } catch (error) {
+      // ignore malformed value
+    }
+  }
+
+  function prefillDuplicateFromGroup() {
+    const panel = document.getElementById('duplicatePanel');
+    if (!panel || panel.hidden) {
+      return;
+    }
+    if (!state.selectedSession || !state.selectedSession.ID) {
+      const draft = getSessionDraftFromForm();
+      const duplicateDate = document.getElementById('duplicateDate');
+      const duplicateGroup = document.getElementById('duplicateGroup');
+      const fallback = {
+        period: document.getElementById('duplicatePeriod')?.value || draft?.Periodo || '',
+        start: document.getElementById('duplicateStart')?.value || draft?.['Hora inicio'] || '',
+        end: document.getElementById('duplicateEnd')?.value || draft?.['Hora fin'] || ''
+      };
+      const targetDate = (duplicateDate && duplicateDate.value) || draft?.Fecha || '';
+      const targetGroup = (duplicateGroup && duplicateGroup.value) || draft?.Grupo || '';
+      if (!targetDate || !targetGroup) {
+        resetDuplicateSlotOptions();
+        return;
+      }
+      loadDuplicateSlots(targetDate, targetGroup, fallback);
+      return;
+    }
+    const duplicateDate = document.getElementById('duplicateDate');
+    const duplicateGroup = document.getElementById('duplicateGroup');
+    const base = state.selectedSession;
+    const targetDate = (duplicateDate && duplicateDate.value) || base.Fecha;
+    const targetGroup = (duplicateGroup && duplicateGroup.value) || base.Grupo;
+    if (!targetDate || !targetGroup) {
+      resetDuplicateSlotOptions();
+      return;
+    }
+    const fallback = {
+      period: document.getElementById('duplicatePeriod')?.value || base.Periodo || '',
+      start: document.getElementById('duplicateStart')?.value || base['Hora inicio'] || '',
+      end: document.getElementById('duplicateEnd')?.value || base['Hora fin'] || ''
+    };
+    loadDuplicateSlots(targetDate, targetGroup, fallback);
+  }
+
+  function renderWeek() {
+    const weekNumber = getISOWeek(state.currentDate);
+    const year = state.currentDate.getFullYear();
+    const weekLabel = document.getElementById('weekLabel');
+    const monday = getMonday(state.currentDate);
+    const friday = new Date(monday);
+    friday.setDate(friday.getDate() + 4);
+    weekLabel.textContent = `Semana ${weekNumber} · ${year} (${toLocaleDay(monday)} - ${toLocaleDay(friday)})`;
+
+    google.script.run
+      .withSuccessHandler(slots => drawWeekGrid(slots))
+      .withFailureHandler(showError)
+      .getWeeklyPlanner(weekNumber, year);
+  }
+
+  function drawWeekGrid(slots) {
+    const grid = document.getElementById('weekGrid');
+    grid.innerHTML = '';
+    const days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+    const grouped = {};
+    days.forEach(day => { grouped[day] = []; });
+    (slots || []).forEach(slot => {
+      if (!grouped[slot.day]) {
+        grouped[slot.day] = [];
+      }
+      grouped[slot.day].push(slot);
+    });
+    days.forEach(day => {
+      const column = document.createElement('div');
+      column.className = 'day-column';
+      const title = document.createElement('h3');
+      title.textContent = day;
+      column.appendChild(title);
+      const entries = grouped[day] || [];
+      if (!entries.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-message';
+        empty.textContent = 'Sin horario definido';
+        column.appendChild(empty);
+      } else {
+        entries.forEach(slot => {
+          const card = document.createElement('div');
+          card.className = 'slot-card';
+          applySlotColor(card, slot.color);
+          const hasSession = !!(slot.session && Object.keys(slot.session).length);
+          const statusLabel = hasSession
+            ? (slot.session['Estado'] || slot.status || 'Planificada')
+            : 'Sin sesión';
+          const unitLabel = hasSession
+            ? (slot.unitName || slot.session['UD'] || 'Sin unidad asignada')
+            : (slot.unitName || 'Sin unidad asignada');
+          const metaPairs = [];
+          if (hasSession && slot.session['Objetivos']) {
+            metaPairs.push(['Objetivos', slot.session['Objetivos']]);
+          }
+          if (hasSession && slot.session['Actividades']) {
+            metaPairs.push(['Actividades', slot.session['Actividades']]);
+          }
+          if (hasSession && slot.session['Evaluación']) {
+            metaPairs.push(['Evaluación', slot.session['Evaluación']]);
+          }
+          if (hasSession && slot.session['Recursos']) {
+            metaPairs.push(['Recursos', slot.session['Recursos']]);
+          }
+          if (hasSession && slot.session['Notas']) {
+            metaPairs.push(['Notas', slot.session['Notas']]);
+          }
+          if (slot.room) {
+            metaPairs.push(['Aula', slot.room]);
+          }
+          const timeLabel = [slot.startTime, slot.endTime].filter(Boolean).join(' - ');
+          const titleParts = [];
+          if (slot.period) {
+            titleParts.push(slot.period);
+          }
+          if (timeLabel) {
+            titleParts.push(timeLabel);
+          }
+          const titleText = titleParts.join(' · ');
+          card.dataset.status = statusLabel;
+          const metaHtml = metaPairs
+            .map(([label, value]) => `<span class="slot-meta"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</span>`)
+            .join('');
+          card.innerHTML = `
+            <span class="slot-title">${escapeHtml(titleText)}</span>
+            <span class="slot-group">${escapeHtml(slot.groupName || '')}</span>
+            <span class="slot-unit">${escapeHtml(unitLabel)}</span>
+            ${metaHtml}
+            <span class="slot-status">${escapeHtml(statusLabel)}</span>
+          `;
+          card.addEventListener('click', () => prefillFormFromSlot(slot));
+          column.appendChild(card);
+        });
+      }
+      grid.appendChild(column);
+    });
+  }
+
+  function prefillFormFromSlot(slot) {
+    const form = document.getElementById('sessionForm');
+    form.elements['ID'].value = slot.session ? (slot.session.ID || '') : '';
+    form.elements['Fecha'].value = slot.date;
+    form.elements['Periodo'].value = slot.session ? (slot.session['Periodo'] || '') : (slot.period || '');
+    form.elements['Hora inicio'].value = slot.session ? (slot.session['Hora inicio'] || '') : (slot.startTime || '');
+    form.elements['Hora fin'].value = slot.session ? (slot.session['Hora fin'] || '') : (slot.endTime || '');
+    form.elements['UD'].value = '';
+    form.elements['Objetivos'].value = slot.session ? (slot.session['Objetivos'] || '') : '';
+    form.elements['Actividades'].value = slot.session ? (slot.session['Actividades'] || '') : '';
+    form.elements['Evaluación'].value = slot.session ? (slot.session['Evaluación'] || '') : '';
+    form.elements['Recursos'].value = slot.session ? (slot.session['Recursos'] || '') : '';
+    form.elements['Estado'].value = slot.session ? (slot.session['Estado'] || 'Planificada') : 'Planificada';
+    form.elements['Notas'].value = slot.session ? (slot.session['Notas'] || '') : '';
+    state.selectedSession = slot.session || null;
+    state.pendingGroupSelection = slot.groupId || null;
+    state.currentGroupId = slot.groupId || '';
+    state.pendingUnitSelection = slot.session && slot.session['UD'] ? slot.session['UD'] : '';
+    const slotDate = new Date(slot.date + 'T00:00:00');
+    state.currentDate = new Date(slotDate);
+    const isoDate = toISODate(slotDate);
+    updateSelectedDayLabel(isoDate, []);
+    loadGroupsForDate(isoDate);
+    renderUnitOptions([], state.pendingUnitSelection);
+    setDuplicateDefaults(slot.session || getSessionDraftFromForm());
+    document.querySelector('[data-tab="detalle"]').click();
+  }
+
+  function onSubmitSession(event) {
+    event.preventDefault();
+    const form = document.getElementById('sessionForm');
+    const formData = new FormData(form);
+    const session = {};
+    formData.forEach((value, key) => {
+      session[key] = value;
+    });
+    google.script.run
+      .withSuccessHandler(saved => {
+        state.selectedSession = saved;
+        state.pendingGroupSelection = saved.Grupo;
+        state.currentGroupId = saved.Grupo;
+        state.pendingUnitSelection = '';
+        form.elements['ID'].value = saved.ID;
+        form.elements['Fecha'].value = saved.Fecha;
+        form.elements['Periodo'].value = saved['Periodo'] || '';
+        form.elements['Hora inicio'].value = saved['Hora inicio'] || '';
+        form.elements['Hora fin'].value = saved['Hora fin'] || '';
+        form.elements['UD'].value = saved['UD'] || '';
+        form.elements['Estado'].value = saved['Estado'] || 'Planificada';
+        alert('Sesión guardada correctamente');
+        setDuplicateDefaults(saved);
+        renderWeek();
+        renderTimeline();
+        loadGroupsForDate(saved.Fecha);
+      })
+      .withFailureHandler(showError)
+      .saveSession(session);
+  }
+
+  function onDeleteSession() {
+    if (!state.selectedSession || !state.selectedSession.ID) {
+      alert('Selecciona una sesión desde la vista semanal para eliminarla.');
+      return;
+    }
+    if (!confirm('¿Eliminar la sesión seleccionada?')) {
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(() => {
+        alert('Sesión eliminada');
+        clearForm();
+        renderWeek();
+        renderTimeline();
+      })
+      .withFailureHandler(showError)
+      .deleteSession(state.selectedSession.ID);
+  }
+
+  function onExecuteDuplicate() {
+    const baseSession = (state.selectedSession && state.selectedSession.ID) ? state.selectedSession : getSessionDraftFromForm();
+    if (!isDuplicateReady(baseSession)) {
+      alert('Completa al menos la fecha y el grupo antes de duplicar.');
+      return;
+    }
+    const duplicateDate = document.getElementById('duplicateDate');
+    const duplicateGroup = document.getElementById('duplicateGroup');
+    const duplicatePeriod = document.getElementById('duplicatePeriod');
+    const duplicateStart = document.getElementById('duplicateStart');
+    const duplicateEnd = document.getElementById('duplicateEnd');
+    const targetDate = (duplicateDate && duplicateDate.value) || baseSession.Fecha;
+    const targetGroup = (duplicateGroup && duplicateGroup.value) || baseSession.Grupo;
+    if (!targetDate) {
+      alert('Indica la fecha destino para la copia.');
+      return;
+    }
+    if (!targetGroup) {
+      alert('Selecciona el grupo de destino.');
+      return;
+    }
+    const payload = {
+      Fecha: targetDate,
+      Grupo: targetGroup,
+      Periodo: (duplicatePeriod && duplicatePeriod.value) || baseSession.Periodo || ''
+    };
+    payload['Hora inicio'] = (duplicateStart && duplicateStart.value) || baseSession['Hora inicio'] || '';
+    payload['Hora fin'] = (duplicateEnd && duplicateEnd.value) || baseSession['Hora fin'] || '';
+    payload['Estado'] = baseSession['Estado'] || 'Planificada';
+    payload['UD'] = baseSession['UD'] || '';
+    payload['Objetivos'] = baseSession['Objetivos'] || '';
+    payload['Actividades'] = baseSession['Actividades'] || '';
+    payload['Evaluación'] = baseSession['Evaluación'] || '';
+    payload['Recursos'] = baseSession['Recursos'] || '';
+    payload['Notas'] = baseSession['Notas'] || '';
+
+    const source = (state.selectedSession && state.selectedSession.ID) ? state.selectedSession.ID : baseSession;
+
+    google.script.run
+      .withSuccessHandler(copied => {
+        alert('Sesión duplicada correctamente');
+        const form = document.getElementById('sessionForm');
+        state.selectedSession = copied;
+        state.pendingGroupSelection = copied.Grupo;
+        state.currentGroupId = copied.Grupo;
+        state.pendingUnitSelection = copied['UD'] || '';
+        state.currentDate = new Date(copied.Fecha);
+        form.elements['ID'].value = copied.ID;
+        form.elements['Fecha'].value = copied.Fecha;
+        form.elements['Grupo'].value = copied.Grupo;
+        form.elements['Periodo'].value = copied['Periodo'] || '';
+        form.elements['Hora inicio'].value = copied['Hora inicio'] || '';
+        form.elements['Hora fin'].value = copied['Hora fin'] || '';
+        form.elements['UD'].value = copied['UD'] || '';
+        form.elements['Objetivos'].value = copied['Objetivos'] || '';
+        form.elements['Actividades'].value = copied['Actividades'] || '';
+        form.elements['Evaluación'].value = copied['Evaluación'] || '';
+        form.elements['Recursos'].value = copied['Recursos'] || '';
+        form.elements['Estado'].value = copied['Estado'] || 'Planificada';
+        form.elements['Notas'].value = copied['Notas'] || '';
+        const groupLabel = (state.bootstrap.grupos || []).find(grupo => grupo && grupo.ID === copied.Grupo)?.Nombre || copied.Grupo;
+        ensureDuplicateGroupOption(copied.Grupo, groupLabel);
+        setDuplicateDefaults(copied);
+        document.querySelector('[data-tab="detalle"]').click();
+        loadGroupsForDate(copied.Fecha);
+        renderWeek();
+        renderTimeline();
+      })
+      .withFailureHandler(showError)
+      .duplicateSession(source, payload);
+  }
+
+  function clearForm() {
+    const form = document.getElementById('sessionForm');
+    form.reset();
+    form.elements['ID'].value = '';
+    state.selectedSession = null;
+    state.pendingGroupSelection = null;
+    state.currentGroupId = '';
+    state.pendingUnitSelection = '';
+    renderUnitOptions([], '');
+    setDuplicateDefaults(null);
+    if (state.currentDate) {
+      const iso = toISODate(state.currentDate);
+      form.elements['Fecha'].value = iso;
+      loadGroupsForDate(iso);
+    }
+  }
+
+  function onCourseFilterChange(event) {
+    state.currentCourseFilter = event.target.value;
+    renderTimeline();
+  }
+
+  function renderTimeline() {
+    google.script.run
+      .withSuccessHandler(items => drawTimeline(items))
+      .withFailureHandler(showError)
+      .getTimelineEntries(state.currentCourseFilter || '');
+  }
+
+  function drawTimeline(items) {
+    const container = document.getElementById('timelineList');
+    container.innerHTML = '';
+    if (!items || !items.length) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-message';
+      empty.textContent = 'No hay datos para la selección actual.';
+      container.appendChild(empty);
+      return;
+    }
+    items.forEach(item => {
+      const node = document.createElement('div');
+      node.className = 'timeline-item';
+      applySlotColor(node, item.color || '#2563eb');
+      const lines = [];
+      const timeLabel = item.startTime && item.endTime ? `${item.startTime} - ${item.endTime}` : (item.startTime || '');
+      lines.push(`<div class="meta">${escapeHtml(item.day)} · ${escapeHtml(item.period || '')}${timeLabel ? ' · ' + escapeHtml(timeLabel) : ''}</div>`);
+      lines.push(`<div class="meta">${escapeHtml(item.course || 'Sin curso')} · ${escapeHtml(item.unitName || 'Sin unidad asignada')}</div>`);
+      lines.push(`<div class="meta"><strong>Estado:</strong> ${escapeHtml(item.status)}</div>`);
+      if (item.objectives) {
+        lines.push(`<div class="meta"><strong>Objetivos:</strong> ${escapeHtml(item.objectives)}</div>`);
+      }
+      if (item.activities) {
+        lines.push(`<div class="meta"><strong>Actividades:</strong> ${escapeHtml(item.activities)}</div>`);
+      }
+      if (item.evaluation) {
+        lines.push(`<div class="meta"><strong>Evaluación:</strong> ${escapeHtml(item.evaluation)}</div>`);
+      }
+      if (item.resources) {
+        lines.push(`<div class="meta"><strong>Recursos:</strong> ${escapeHtml(item.resources)}</div>`);
+      }
+      if (item.notes) {
+        lines.push(`<div class="meta"><strong>Notas:</strong> ${escapeHtml(item.notes)}</div>`);
+      }
+      node.innerHTML = `
+        <h4>${escapeHtml(item.date)} · ${escapeHtml(item.groupName || 'Sin grupo')}</h4>
+        ${lines.join('')}
+      `;
+      const header = node.querySelector('h4');
+      if (header && item.color) {
+        header.style.color = normalizeHexColor(item.color) || header.style.color;
+      }
+      container.appendChild(node);
+    });
+  }
+
+  function shiftWeek(delta) {
+    state.currentDate.setDate(state.currentDate.getDate() + delta * 7);
+    const iso = toISODate(state.currentDate);
+    const dateInput = document.querySelector('input[name="Fecha"]');
+    if (dateInput) {
+      dateInput.value = iso;
+    }
+    updateSelectedDayLabel(iso, []);
+    loadGroupsForDate(iso);
+    renderWeek();
+  }
+
+  function showError(error) {
+    alert(error && error.message ? error.message : error);
+  }
+
+  function getISOWeek(date) {
+    const target = new Date(date.valueOf());
+    const dayNr = (target.getDay() + 6) % 7;
+    target.setDate(target.getDate() - dayNr + 3);
+    const firstThursday = target.valueOf();
+    target.setMonth(0, 1);
+    if (target.getDay() !== 4) {
+      target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+    }
+    const weekNumber = 1 + Math.ceil((firstThursday - target) / 604800000);
+    return weekNumber;
+  }
+
+  function getMonday(date) {
+    const monday = new Date(date);
+    const day = monday.getDay();
+    const diff = (day === 0 ? -6 : 1) - day;
+    monday.setDate(monday.getDate() + diff);
+    return monday;
+  }
+
+  function toISODate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function toLocaleDay(date) {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${day}/${month}`;
+  }
+</script>

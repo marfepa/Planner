@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Abrir planner</title>
+    <base target="_top">
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        margin: 0;
+        padding: 20px;
+        color: #1f2937;
+      }
+      h2 {
+        margin-top: 0;
+        font-size: 16px;
+        color: #1d4ed8;
+      }
+      p {
+        margin: 8px 0;
+      }
+      .actions {
+        margin-top: 16px;
+        display: flex;
+        gap: 8px;
+      }
+      button {
+        border: none;
+        border-radius: 4px;
+        padding: 8px 12px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      button.primary {
+        background: #2563eb;
+        color: #fff;
+      }
+      button.secondary {
+        background: #e2e8f0;
+        color: #1f2937;
+      }
+      .hint {
+        font-size: 12px;
+        color: #475569;
+        margin-top: 12px;
+      }
+      .error {
+        color: #b91c1c;
+        margin-top: 12px;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Abrir planner en pestaña nueva</h2>
+    <p>Pulsa “Abrir ahora” para lanzar el planner en una pestaña del navegador. Si aparece un aviso de ventanas emergentes, permítelas temporalmente.</p>
+    <div class="actions">
+      <button id="openBtn" class="primary" type="button">Abrir ahora</button>
+      <button id="closeBtn" class="secondary" type="button">Cerrar</button>
+    </div>
+    <p id="status" class="hint">La pestaña se abrirá a pantalla completa.</p>
+    <div id="error" class="error" hidden></div>
+    <script>
+      const TARGET_URL = 'https://script.google.com/a/macros/scorazon.hhdc.net/s/AKfycbwhDQx5sPimQafUQhd0bhTG_4y97GODyNewv-7CWlJjKnJwrivuBL0kAfr8XMkw1ozNxw/exec';
+      const statusLabel = document.getElementById('status');
+      const errorLabel = document.getElementById('error');
+      const openBtn = document.getElementById('openBtn');
+      const closeBtn = document.getElementById('closeBtn');
+
+      function showError(message) {
+        errorLabel.textContent = message;
+        errorLabel.hidden = false;
+      }
+
+      openBtn.addEventListener('click', () => {
+        openBtn.disabled = true;
+        statusLabel.textContent = 'Abriendo planner en una pestaña nueva...';
+        errorLabel.hidden = true;
+        const newTab = window.open(TARGET_URL, '_blank', 'noopener,noreferrer');
+        if (!newTab) {
+          showError('El navegador bloqueó la ventana emergente. Permítela e inténtalo de nuevo.');
+          openBtn.disabled = false;
+          statusLabel.textContent = 'Pulsa “Abrir ahora” tras permitir emergentes.';
+          return;
+        }
+        statusLabel.textContent = 'Pestaña abierta. Puedes cerrar esta ventana si lo deseas.';
+      });
+
+      closeBtn.addEventListener('click', () => {
+        google.script.host.close();
+      });
+    </script>
+  </body>
+</html>

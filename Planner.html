@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8">
+    <title>Planificador</title>
+    <?!= include('PlannerCss'); ?>
+  </head>
+  <body>
+    <header class="planner-header">
+      <h1>Planificador docente</h1>
+      <div class="week-picker">
+        <button id="prevWeek" type="button">◀</button>
+        <span id="weekLabel"></span>
+        <button id="nextWeek" type="button">▶</button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="week" type="button">Semana</button>
+      <button class="tab" data-tab="timeline" type="button">Línea temporal</button>
+      <button class="tab" data-tab="detalle" type="button">Detalle</button>
+    </nav>
+
+    <section id="tab-week" class="tab-content active">
+      <div id="courseLegend" class="course-legend" hidden></div>
+      <div id="weekGrid" class="week-grid"></div>
+    </section>
+
+    <section id="tab-timeline" class="tab-content">
+      <div class="timeline-controls">
+        <label>Filtro
+          <select id="courseFilter"></select>
+        </label>
+      </div>
+      <div id="timelineList" class="timeline"></div>
+    </section>
+
+    <section id="tab-detalle" class="tab-content">
+      <form id="sessionForm">
+        <input type="hidden" name="ID">
+        <label class="date-field">Fecha
+          <input type="date" name="Fecha" required>
+          <span id="selectedDayLabel" class="form-hint"></span>
+        </label>
+        <label>Grupo
+          <select name="Grupo" required></select>
+        </label>
+        <label>Periodo
+          <input name="Periodo" placeholder="Periodo" autocomplete="off">
+        </label>
+        <label>Hora inicio
+          <input type="time" name="Hora inicio" autocomplete="off">
+        </label>
+        <label>Hora fin
+          <input type="time" name="Hora fin" autocomplete="off">
+        </label>
+        <label>Unidad
+          <select name="UD"></select>
+        </label>
+        <label>Objetivos
+          <textarea name="Objetivos"></textarea>
+        </label>
+        <label>Actividades
+          <textarea name="Actividades"></textarea>
+        </label>
+        <label>Evaluación
+          <textarea name="Evaluación"></textarea>
+        </label>
+        <label>Recursos
+          <input name="Recursos" placeholder="IDs de recursos separados por coma" autocomplete="off">
+        </label>
+        <label>Estado
+          <select name="Estado">
+            <option value="Planificada">Planificada</option>
+            <option value="En curso">En curso</option>
+            <option value="Completada">Completada</option>
+            <option value="Cancelada">Cancelada</option>
+          </select>
+        </label>
+        <label>Notas
+          <textarea name="Notas"></textarea>
+        </label>
+        <div class="form-actions">
+          <button type="submit" class="primary">Guardar sesión</button>
+          <button type="button" id="resetForm" class="secondary">Limpiar</button>
+          <button type="button" id="deleteSession" class="danger">Eliminar</button>
+        </div>
+      </form>
+      <div id="duplicatePanel" class="duplicate-panel" hidden>
+        <div class="duplicate-header">
+          <h3>Duplicar sesión</h3>
+          <p>Crea una copia seleccionando destino y ajustes. Cualquier campo en blanco reutiliza el valor original.</p>
+        </div>
+        <div class="duplicate-grid">
+          <label>Fecha destino
+            <input type="date" id="duplicateDate">
+          </label>
+          <label>Grupo destino
+            <select id="duplicateGroup"></select>
+          </label>
+          <label>Horario destino
+            <select id="duplicateSlot"></select>
+          </label>
+          <label>Periodo destino
+            <input id="duplicatePeriod" placeholder="Igual que origen" autocomplete="off">
+          </label>
+          <label>Hora inicio destino
+            <input type="time" id="duplicateStart" autocomplete="off">
+          </label>
+          <label>Hora fin destino
+            <input type="time" id="duplicateEnd" autocomplete="off">
+          </label>
+        </div>
+        <div class="duplicate-actions">
+          <button type="button" id="executeDuplicate" class="primary">Duplicar sesión</button>
+        </div>
+      </div>
+    </section>
+
+    <?!= include('PlannerJs'); ?>
+  </body>
+</html>
